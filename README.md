@@ -27,6 +27,7 @@ y abre http://localhost:5173
 
 - [Cómo funciona por dentro](docs/funcionamiento.md)
 - [Cómo publicar cambios](docs/publicar.md)
+- [Seguridad](docs/seguridad.md)
 - [Historial de cambios](CHANGELOG.md)
 
 Tipos de cambio: [Rates By Exchange Rate API](https://www.exchangerate-api.com).

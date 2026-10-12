@@ -3,6 +3,9 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <!-- Seguridad: solo se permite cargar código y datos de estos orígenes (ver docs/seguridad.md) -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' https://flagcdn.com; connect-src 'self' https://open.er-api.com; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; upgrade-insecure-requests">
+  <meta name="referrer" content="no-referrer">
   <title>Conversor de monedas</title>
   <meta name="description" content="Convierte yenes, euros, dólares y cualquier otra moneda con tipos de cambio actualizados.">
   <meta name="theme-color" content="#0b1020">
@@ -35,7 +38,7 @@
     <section class="hero">
       <label for="amount" class="hero-label">Tengo</label>
       <div class="hero-row">
-        <input id="amount" type="text" inputmode="decimal" autocomplete="off" value="1000" aria-label="Cantidad">
+        <input id="amount" type="text" inputmode="decimal" autocomplete="off" maxlength="20" value="1000" aria-label="Cantidad">
         <button id="from" class="currency-btn" aria-label="Cambiar moneda de origen"></button>
       </div>
       <p id="from-name" class="hero-sub"></p>
@@ -52,7 +55,7 @@
     <ul id="results" class="results" aria-live="polite"></ul>
 
     <p id="status" class="status">Cargando tipos de cambio…</p>
-    <p class="credit"><a href="https://www.exchangerate-api.com" target="_blank" rel="noopener">Rates By Exchange Rate API</a></p>
+    <p class="credit"><a href="https://www.exchangerate-api.com" target="_blank" rel="noopener noreferrer">Rates By Exchange Rate API</a></p>
   </main>
 
   <dialog id="picker" class="picker" aria-labelledby="picker-title">
@@ -65,7 +68,7 @@
       </div>
       <div class="search">
         <svg class="search-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
-        <input id="search" type="search" placeholder="Buscar: libra, GBP, peso…" autocomplete="off" aria-label="Buscar moneda">
+        <input id="search" type="search" maxlength="40" placeholder="Buscar: libra, GBP, peso…" autocomplete="off" aria-label="Buscar moneda">
       </div>
       <ul id="picker-list" class="picker-list"></ul>
     </div>

@@ -7,17 +7,43 @@ const POPULAR = ["EUR", "USD", "JPY", "GBP", "CHF", "CNY", "KRW", "MXN", "CAD", 
 // Monedas cuyo país no sale de las dos primeras letras del código.
 const FLAG_OVERRIDES = { EUR: "eu", ANG: "cw", XAF: "cm", XOF: "sn", XCD: "ag", XPF: "pf" };
 
+// Solo se aceptan códigos ISO de 3 letras mayúsculas: cualquier otra cosa se descarta.
+const CODE_RE = /^[A-Z]{3}$/;
+const MAX_AMOUNT_CHARS = 20;
+
 const $ = (id) => document.getElementById(id);
 const names = new Intl.DisplayNames(["es"], { type: "currency" });
 
 const state = {
-  from: load("from", "JPY"),
-  targets: load("targets", DEFAULT_TARGETS),
-  amount: load("amount", "1000"),
+  from: validCode(load("from", "JPY")) ? load("from", "JPY") : "JPY",
+  targets: cleanTargets(load("targets", DEFAULT_TARGETS)),
+  amount: String(load("amount", "1000")).slice(0, MAX_AMOUNT_CHARS),
   rates: null, // tipos con base USD: { CODE: valor }
   updated: null,
   picking: null, // "from" o "add" mientras el selector está abierto
 };
+
+function validCode(code) {
+  return typeof code === "string" && CODE_RE.test(code);
+}
+
+function cleanTargets(list) {
+  return Array.isArray(list) ? [...new Set(list.filter(validCode))].slice(0, 50) : DEFAULT_TARGETS;
+}
+
+// Se queda solo con pares código -> número positivo; protege frente a respuestas manipuladas.
+function cleanRates(raw) {
+  if (!raw || typeof raw !== "object") return null;
+  const out = {};
+  for (const [code, value] of Object.entries(raw)) {
+    if (validCode(code) && typeof value === "number" && Number.isFinite(value) && value > 0) out[code] = value;
+  }
+  return out.USD === 1 && Object.keys(out).length > 10 ? out : null;
+}
+
+function escapeHtml(text) {
+  return String(text).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+}
 
 function load(key, fallback) {
   try {
@@ -43,13 +69,24 @@ function normalize(text) {
 }
 
 // Bandera redonda (imagen de flagcdn.com); si no existe, un círculo con el código.
+// Los códigos ya vienen validados (3 letras), así que es seguro meterlos en el HTML.
 function flagHtml(code, size = "") {
   const cc = FLAG_OVERRIDES[code] || code.slice(0, 2).toLowerCase();
-  const badge = `<span class="flag badge ${size}">${code.slice(0, 3)}</span>`;
-  if (code.startsWith("X") && !FLAG_OVERRIDES[code]) return badge;
-  return `<img class="flag ${size}" src="https://flagcdn.com/w80/${cc}.png" alt="" loading="lazy"
-    onerror="this.outerHTML='${badge.replace(/"/g, "&quot;")}'">`;
+  if (code.startsWith("X") && !FLAG_OVERRIDES[code]) return badgeHtml(code, size);
+  return `<img class="flag ${size}" src="https://flagcdn.com/w80/${cc}.png" alt="" loading="lazy" data-code="${code}">`;
 }
+
+function badgeHtml(code, size = "") {
+  return `<span class="flag badge ${size}">${code}</span>`;
+}
+
+// Si una bandera no carga, se cambia por el círculo con el código (sin JavaScript en el HTML, por la CSP).
+document.addEventListener("error", (e) => {
+  const img = e.target;
+  if (img instanceof HTMLImageElement && img.classList.contains("flag")) {
+    img.outerHTML = badgeHtml(img.dataset.code, img.classList.contains("lg") ? "lg" : "");
+  }
+}, true);
 
 function parseAmount(text) {
   const n = parseFloat(String(text).replace(/\s/g, "").replace(/\.(?=\d{3}(\D|$))/g, "").replace(",", "."));
@@ -147,12 +184,13 @@ function renderPicker() {
   };
   const found = all.filter(matches);
   if (q) found.sort((a, b) => score(a) - score(b) || a.localeCompare(b));
-  html += found.length ? found.map(item).join("") : `<li class="none">No hay ninguna moneda con «${$("search").value}».</li>`;
+  html += found.length ? found.map(item).join("") : `<li class="none">No hay ninguna moneda con «${escapeHtml($("search").value)}».</li>`;
   $("picker-list").innerHTML = html;
   $("picker-list").scrollTop = 0;
 }
 
 function pick(code) {
+  if (!validCode(code) || !state.rates[code]) return;
   if (state.picking === "from") {
     state.from = code;
     save("from", state.from);
@@ -180,18 +218,25 @@ function showUpdated() {
 async function fetchRates() {
   $("refresh").classList.add("spin");
   try {
-    const res = await fetch(API + "USD", { cache: "no-store" });
+    const res = await fetch(API + "USD", {
+      cache: "no-store",
+      credentials: "omit",
+      referrerPolicy: "no-referrer",
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!res.ok) throw new Error("HTTP " + res.status);
     const data = await res.json();
-    if (data.result !== "success") throw new Error("respuesta no válida");
-    state.rates = data.rates;
+    const rates = data && data.result === "success" ? cleanRates(data.rates) : null;
+    if (!rates || !Number.isFinite(data.time_last_update_unix)) throw new Error("respuesta no válida");
+    state.rates = rates;
     state.updated = data.time_last_update_unix * 1000;
     save("cache", { rates: state.rates, updated: state.updated });
     render();
     showUpdated();
   } catch (err) {
     const cache = load("cache", null);
-    if (cache && !state.rates) {
-      state.rates = cache.rates;
+    if (cache && !state.rates && cleanRates(cache.rates)) {
+      state.rates = cleanRates(cache.rates);
       state.updated = cache.updated;
       render();
     }

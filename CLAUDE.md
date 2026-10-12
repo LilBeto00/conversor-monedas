@@ -8,3 +8,4 @@ PWA estática (HTML/CSS/JS sin frameworks) publicada en GitHub Pages desde `main
 - Al cambiar archivos que guarda `sw.js`, subir la versión de `CACHE`.
 - Documentación en `docs/`; apuntar cada cambio visible en `CHANGELOG.md`.
 - Probar en local con `python -m http.server 5173`.
+- Seguridad: no usar JavaScript inline ni `unsafe-inline`; cualquier dominio nuevo hay que añadirlo a la CSP de `index.html`; todo dato externo que vaya a `innerHTML` se valida o se escapa (ver `docs/seguridad.md`).
