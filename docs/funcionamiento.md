@@ -30,7 +30,7 @@ En `localStorage` del navegador, con prefijo `conv:`:
 - `amount`: última cantidad.
 - `cache`: últimos tipos descargados, para usar sin conexión.
 
-Nada sale del móvil salvo la petición de tipos de cambio.
+Nada de esto sale del móvil. Las únicas peticiones externas son los tipos de cambio, las banderas (flagcdn.com) y la tipografía (Google Fonts).
 
 ## Detalles
 
