@@ -1,5 +1,5 @@
 // Guarda la app para que abra sin conexión. Los tipos de cambio siempre se piden a la red.
-const CACHE = "conversor-v1";
+const CACHE = "conversor-v2";
 const FILES = ["./", "index.html", "style.css", "app.js", "manifest.webmanifest", "icons/icon-192.png", "icons/icon-512.png"];
 
 self.addEventListener("install", (e) => {

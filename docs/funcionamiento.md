@@ -35,5 +35,7 @@ Nada sale del móvil salvo la petición de tipos de cambio.
 ## Detalles
 
 - Los nombres de las monedas salen en español con `Intl.DisplayNames`.
-- Las banderas se calculan a partir de las dos primeras letras del código (JPY → 🇯🇵). En Windows se ven como letras porque Windows no tiene emojis de banderas; en el móvil se ven bien.
+- Las banderas son imágenes de flagcdn.com, calculadas a partir de las dos primeras letras del código (JPY → jp). Las excepciones (EUR → eu, etc.) están en `FLAG_OVERRIDES` en `app.js`. Si no hay bandera, sale un círculo con el código.
+- El selector de monedas es un `<dialog>` con buscador: busca por código o nombre en español sin tener en cuenta tildes, y ordena primero el código exacto y luego las monedas de `POPULAR`.
+- La tipografía es Plus Jakarta Sans, de Google Fonts.
 - Al cambiar algo en `sw.js` o en los archivos guardados, sube el número de `CACHE` (por ejemplo `conversor-v2`) para que los móviles descarguen la versión nueva.

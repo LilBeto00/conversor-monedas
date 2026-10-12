@@ -2,6 +2,10 @@
 const API = "https://open.er-api.com/v6/latest/";
 const REFRESH_MS = 10 * 60 * 1000; // vuelve a consultar cada 10 minutos
 const DEFAULT_TARGETS = ["EUR", "USD"];
+const POPULAR = ["EUR", "USD", "JPY", "GBP", "CHF", "CNY", "KRW", "MXN", "CAD", "AUD"];
+
+// Monedas cuyo país no sale de las dos primeras letras del código.
+const FLAG_OVERRIDES = { EUR: "eu", ANG: "cw", XAF: "cm", XOF: "sn", XCD: "ag", XPF: "pf" };
 
 const $ = (id) => document.getElementById(id);
 const names = new Intl.DisplayNames(["es"], { type: "currency" });
@@ -12,6 +16,7 @@ const state = {
   amount: load("amount", "1000"),
   rates: null, // tipos con base USD: { CODE: valor }
   updated: null,
+  picking: null, // "from" o "add" mientras el selector está abierto
 };
 
 function load(key, fallback) {
@@ -26,15 +31,24 @@ function save(key, value) {
 }
 
 function currencyName(code) {
-  try { return names.of(code); } catch { return code; }
+  try {
+    const n = names.of(code);
+    return n.charAt(0).toUpperCase() + n.slice(1);
+  } catch { return code; }
 }
 
-// Bandera aproximada a partir de las dos primeras letras del código (JPY -> JP).
-function flag(code) {
-  if (code === "EUR") return "🇪🇺";
-  const cc = code.slice(0, 2);
-  if (!/^[A-Z]{2}$/.test(cc)) return "💱";
-  return String.fromCodePoint(...[...cc].map((c) => 0x1f1a5 + c.charCodeAt(0)));
+// Quita tildes y mayúsculas para que "dolar" encuentre "dólar".
+function normalize(text) {
+  return text.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+}
+
+// Bandera redonda (imagen de flagcdn.com); si no existe, un círculo con el código.
+function flagHtml(code, size = "") {
+  const cc = FLAG_OVERRIDES[code] || code.slice(0, 2).toLowerCase();
+  const badge = `<span class="flag badge ${size}">${code.slice(0, 3)}</span>`;
+  if (code.startsWith("X") && !FLAG_OVERRIDES[code]) return badge;
+  return `<img class="flag ${size}" src="https://flagcdn.com/w80/${cc}.png" alt="" loading="lazy"
+    onerror="this.outerHTML='${badge.replace(/"/g, "&quot;")}'">`;
 }
 
 function parseAmount(text) {
@@ -55,30 +69,102 @@ function convert(amount, from, to) {
   return (amount / r[from]) * r[to];
 }
 
-function fillSelects() {
-  const codes = Object.keys(state.rates).sort();
-  const option = (c) => `<option value="${c}">${c} · ${currencyName(c)}</option>`;
-  $("from").innerHTML = codes.map(option).join("");
-  $("from").value = state.from;
-  const extra = codes.filter((c) => !state.targets.includes(c) && c !== state.from);
-  $("extra").innerHTML = extra.map(option).join("");
+function renderFrom() {
+  $("from").innerHTML = `${flagHtml(state.from)}<span>${state.from}</span>
+    <svg class="chev" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>`;
+  $("from-name").textContent = currencyName(state.from);
 }
 
 function render() {
+  renderFrom();
   if (!state.rates) return;
   const amount = parseAmount($("amount").value);
   const list = state.targets.filter((c) => c !== state.from && state.rates[c]);
+  if (!list.length) {
+    $("results").innerHTML = `<li class="empty">Pulsa «Añadir moneda» para ver a cuánto equivale.</li>`;
+    return;
+  }
   $("results").innerHTML = list.map((code) => `
     <li class="result">
-      <span class="flag" aria-hidden="true">${flag(code)}</span>
+      ${flagHtml(code, "lg")}
       <div class="info">
         <div class="value">${format(convert(amount, state.from, code), code)}</div>
-        <div class="name">${code} · ${currencyName(code)} · 1 ${state.from} = ${convert(1, state.from, code).toLocaleString("es-ES", { maximumSignificantDigits: 4 })} ${code}</div>
+        <div class="name">${currencyName(code)} · 1 ${state.from} = ${convert(1, state.from, code).toLocaleString("es-ES", { maximumSignificantDigits: 4 })} ${code}</div>
       </div>
-      <button class="use" data-use="${code}" aria-label="Convertir desde ${code}" title="Convertir desde ${code}">⇅</button>
-      <button data-remove="${code}" aria-label="Quitar ${code}" title="Quitar">✕</button>
+      <div class="actions">
+        <button data-use="${code}" aria-label="Convertir desde ${code}" title="Convertir desde ${code}">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4v16M7 4L3 8M7 4l4 4M17 20V4M17 20l-4-4M17 20l4-4"/></svg>
+        </button>
+        <button class="remove" data-remove="${code}" aria-label="Quitar ${code}" title="Quitar">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+        </button>
+      </div>
     </li>`).join("");
 }
+
+/* ---------- Selector con buscador ---------- */
+
+function openPicker(mode) {
+  if (!state.rates) return;
+  state.picking = mode;
+  $("picker-title").textContent = mode === "from" ? "Convertir desde" : "Añadir moneda";
+  $("search").value = "";
+  renderPicker();
+  $("picker").showModal();
+  // En el móvil el teclado tapa la lista si se abre solo; en el PC enfocamos el buscador directamente.
+  if (matchMedia("(pointer: fine)").matches) $("search").focus();
+}
+
+function closePicker() {
+  $("picker").close();
+  state.picking = null;
+}
+
+function renderPicker() {
+  const q = normalize($("search").value.trim());
+  const all = Object.keys(state.rates).sort();
+  const matches = (c) => !q || normalize(c).includes(q) || normalize(currencyName(c)).includes(q);
+  const current = state.picking === "from" ? [state.from] : state.targets;
+
+  const item = (c) => `
+    <li><button data-pick="${c}" aria-current="${current.includes(c)}">
+      ${flagHtml(c)}<span class="code">${c}</span><span class="cname">${currencyName(c)}</span>
+      ${current.includes(c) ? '<span class="check">✓</span>' : ""}
+    </button></li>`;
+
+  let html = "";
+  if (!q) {
+    html += `<li class="group">Populares</li>` + POPULAR.filter((c) => state.rates[c]).map(item).join("");
+    html += `<li class="group">Todas</li>`;
+  }
+  // Al buscar, primero el código exacto, luego las monedas populares y luego el resto.
+  const score = (c) => {
+    const code = normalize(c);
+    if (code === q) return 0;
+    if (code.startsWith(q)) return 1;
+    if (POPULAR.includes(c)) return 2 + POPULAR.indexOf(c) / 100;
+    return normalize(currencyName(c)).startsWith(q) ? 3 : 4;
+  };
+  const found = all.filter(matches);
+  if (q) found.sort((a, b) => score(a) - score(b) || a.localeCompare(b));
+  html += found.length ? found.map(item).join("") : `<li class="none">No hay ninguna moneda con «${$("search").value}».</li>`;
+  $("picker-list").innerHTML = html;
+  $("picker-list").scrollTop = 0;
+}
+
+function pick(code) {
+  if (state.picking === "from") {
+    state.from = code;
+    save("from", state.from);
+  } else if (!state.targets.includes(code)) {
+    state.targets.push(code);
+    save("targets", state.targets);
+  }
+  closePicker();
+  render();
+}
+
+/* ---------- Tipos de cambio ---------- */
 
 function setStatus(text, error = false) {
   $("status").textContent = text;
@@ -100,7 +186,6 @@ async function fetchRates() {
     state.rates = data.rates;
     state.updated = data.time_last_update_unix * 1000;
     save("cache", { rates: state.rates, updated: state.updated });
-    fillSelects();
     render();
     showUpdated();
   } catch (err) {
@@ -108,7 +193,6 @@ async function fetchRates() {
     if (cache && !state.rates) {
       state.rates = cache.rates;
       state.updated = cache.updated;
-      fillSelects();
       render();
     }
     setStatus(state.rates ? "Sin conexión: usando los últimos tipos guardados." : "No se pudieron cargar los tipos de cambio.", true);
@@ -117,29 +201,32 @@ async function fetchRates() {
   }
 }
 
+/* ---------- Eventos ---------- */
+
 $("amount").value = state.amount;
 $("amount").addEventListener("input", () => { save("amount", $("amount").value); render(); });
 $("amount").addEventListener("focus", (e) => e.target.select());
 
-$("from").addEventListener("change", (e) => {
-  state.from = e.target.value;
-  save("from", state.from);
-  fillSelects();
-  render();
+$("from").addEventListener("click", () => openPicker("from"));
+$("add").addEventListener("click", () => openPicker("add"));
+$("picker-close").addEventListener("click", closePicker);
+$("search").addEventListener("input", renderPicker);
+$("search").addEventListener("keydown", (e) => {
+  if (e.key !== "Enter") return;
+  const first = $("picker-list").querySelector("[data-pick]");
+  if (first && $("search").value.trim()) pick(first.dataset.pick);
 });
-
-$("add").addEventListener("click", () => {
-  const code = $("extra").value;
-  if (!code || state.targets.includes(code)) return;
-  state.targets.push(code);
-  save("targets", state.targets);
-  fillSelects();
-  render();
+$("picker-list").addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-pick]");
+  if (btn) pick(btn.dataset.pick);
 });
+// Cerrar tocando fuera de la hoja.
+$("picker").addEventListener("click", (e) => { if (e.target === $("picker")) closePicker(); });
 
 $("results").addEventListener("click", (e) => {
-  const remove = e.target.dataset.remove;
-  const use = e.target.dataset.use;
+  const btn = e.target.closest("button");
+  if (!btn) return;
+  const { remove, use } = btn.dataset;
   if (remove) {
     state.targets = state.targets.filter((c) => c !== remove);
   } else if (use) {
@@ -150,16 +237,14 @@ $("results").addEventListener("click", (e) => {
     state.targets = state.targets.map((c) => (c === use ? state.from : c));
     state.from = use;
     save("from", state.from);
-  } else {
-    return;
   }
   save("targets", state.targets);
-  fillSelects();
   render();
 });
 
 $("refresh").addEventListener("click", fetchRates);
 
+render();
 fetchRates();
 setInterval(fetchRates, REFRESH_MS);
 document.addEventListener("visibilitychange", () => { if (!document.hidden) fetchRates(); });
