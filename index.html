@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Conversor de monedas</title>
+  <meta name="description" content="Convierte yenes, euros, dólares y cualquier otra moneda con tipos de cambio actualizados.">
+  <meta name="theme-color" content="#0f172a">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon-192.png" type="image/png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Conversor">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="app">
+    <header>
+      <h1>Conversor</h1>
+      <button id="refresh" class="icon-btn" aria-label="Actualizar tipos de cambio" title="Actualizar">⟳</button>
+    </header>
+
+    <section class="card source">
+      <label for="amount">Cantidad</label>
+      <div class="row">
+        <input id="amount" type="text" inputmode="decimal" autocomplete="off" value="1000">
+        <select id="from" aria-label="Moneda de origen"></select>
+      </div>
+    </section>
+
+    <ul id="results" class="results" aria-live="polite"></ul>
+
+    <section class="card add">
+      <label for="extra">Añadir otra moneda</label>
+      <div class="row">
+        <select id="extra"></select>
+        <button id="add" class="btn">Añadir</button>
+      </div>
+    </section>
+
+    <p id="status" class="status">Cargando tipos de cambio…</p>
+    <p class="credit"><a href="https://www.exchangerate-api.com" target="_blank" rel="noopener">Rates By Exchange Rate API</a></p>
+  </main>
+  <script src="app.js"></script>
+</body>
+</html>
